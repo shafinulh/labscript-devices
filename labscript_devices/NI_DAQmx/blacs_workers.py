@@ -34,6 +34,10 @@ from blacs.tab_base_classes import Worker
 from .utils import split_conn_port, split_conn_DO, split_conn_AI
 from .daqmx_utils import incomplete_sample_detection
 
+import zmq
+
+from labscript_utils.ls_zprocess import Context
+
 
 class NI_DAQmxOutputWorker(Worker):
     def init(self):
@@ -415,6 +419,10 @@ class NI_DAQmxAcquisitionWorker(Worker):
     MAX_READ_PTS = 10000
 
     def init(self):
+        self.data_socket = Context().socket(zmq.REQ)
+        self.data_socket.connect(
+            f'tcp://{self.parent_host}:{self.data_receiver_port}'
+        )
         # Prevent interference between the read callback and the shutdown code:
         self.tasklock = threading.RLock()
 
@@ -467,6 +475,11 @@ class NI_DAQmxAcquisitionWorker(Worker):
             data = self.read_array[: int(samples_read.value), :].astype(np.float32)
             if self.buffered_mode:
                 # Append to the list of acquired data:
+                dtypes = [(chan, np.float32) for chan in self.buffered_chans]
+                raw_data = np.concatenate(data).view(dtypes)
+                self.data_socket.send(raw_data)
+                response = self.data_socket.recv()
+                assert response == b'ok', response
                 self.acquired_data.append(data)
             else:
                 # TODO: Send it to the broker thingy.
@@ -531,7 +544,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
         self.task.callback_ptr = DAQmxEveryNSamplesEventCallbackPtr(self.read)
 
         self.task.RegisterEveryNSamplesEvent(
-            DAQmx_Val_Acquired_Into_Buffer, num_samples, 0, self.task.callback_ptr, 100
+            DAQmx_Val_Acquired_Into_Buffer, 100, 0, self.task.callback_ptr, 100
         )
 
         self.task.StartTask()
@@ -586,6 +599,11 @@ class NI_DAQmxAcquisitionWorker(Worker):
             return True
         if self.buffered_chans is not None:
             self.stop_task()
+            # dtypes = [(chan, np.float32) for chan in self.buffered_chans]
+            # raw_data = np.concatenate(self.acquired_data).view(dtypes)
+            # self.data_socket.send(raw_data)
+            # response = self.data_socket.recv()
+            # assert response == b'ok', response
         self.buffered_mode = False
         self.logger.info('transitioning to manual mode, task stopped')
         self.start_task(self.manual_mode_chans, self.manual_mode_rate)

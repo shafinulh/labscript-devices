@@ -15,10 +15,37 @@ import h5py
 from labscript_utils import dedent
 
 from blacs.device_base_class import DeviceTab
+from labscript_utils.qtwidgets.analoginput import AnalogInput
+from labscript_utils.ls_zprocess import ZMQServer
 from .utils import split_conn_AO, split_conn_DO
+from qtutils import UiLoader, inmain_decorator
 from . import models
 import warnings
+import time
+import numpy as np
 
+class DataReceiver(ZMQServer):
+    """ZMQServer that receives images on a zmq.REP socket, replies 'ok', and updates the
+    image widget and fps indicator"""
+
+    def __init__(self, button):
+        ZMQServer.__init__(self, port=None, dtype='multipart')
+        self.button = button
+        self.last_frame_time = None
+        self.frame_rate = None
+        self.update_event = None
+
+    @inmain_decorator(wait_for_return=True)
+    def handler(self, data):
+        # Acknowledge immediately so that the worker process can begin acquiring the
+        # next frame. This increases the possible frame rate since we may render a frame
+        # whilst acquiring the next, but does not allow us to accumulate a backlog since
+        # only one call to this method may occur at a time.
+        self.send([b'ok'])
+        data = np.frombuffer(memoryview(data[0]), dtype=np.float32)
+        self.button.set_buffer([data])
+        # time.sleep(0.05)
+        return self.NO_RESPONSE
 
 class NI_DAQmxTab(DeviceTab):
     def initialise_GUI(self):
@@ -127,6 +154,13 @@ class NI_DAQmxTab(DeviceTab):
             widget_list.append((name, DO_widgets, split_conn_DO))
         self.auto_place_widgets(*widget_list)
 
+        layout = self.get_tab_layout()
+        self.ai_button = AnalogInput('AI1', 'AI1')
+        self.ai_button.set_value(4)
+        layout.addWidget(self.ai_button)
+
+        self.data_receiver = DataReceiver(self.ai_button)
+
         # We only need a wait monitor worker if we are if fact the device with
         # the wait monitor input.
         with h5py.File(connection_table.filepath, 'r') as f:
@@ -209,6 +243,7 @@ class NI_DAQmxTab(DeviceTab):
                     'AI_timebase_terminal': properties.get('AI_timebase_terminal',None),
                     'AI_timebase_rate': properties.get('AI_timebase_rate',None),
                     'clock_terminal': clock_terminal,
+                    'data_receiver_port': self.data_receiver.port,
                 },
             )
             self.add_secondary_worker("acquisition_worker")
