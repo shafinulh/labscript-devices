@@ -419,10 +419,10 @@ class NI_DAQmxAcquisitionWorker(Worker):
     MAX_READ_PTS = 10000
 
     def init(self):
-        self.data_socket = Context().socket(zmq.REQ)
-        self.data_socket.connect(
-            f'tcp://{self.parent_host}:{self.data_receiver_port}'
-        )
+        # self.data_socket = Context().socket(zmq.REQ)
+        # self.data_socket.connect(
+        #     f'tcp://{self.parent_host}:{self.data_receiver_port}'
+        # )
         # Prevent interference between the read callback and the shutdown code:
         self.tasklock = threading.RLock()
 
@@ -475,11 +475,11 @@ class NI_DAQmxAcquisitionWorker(Worker):
             data = self.read_array[: int(samples_read.value), :].astype(np.float32)
             if self.buffered_mode:
                 # Append to the list of acquired data:
-                dtypes = [(chan, np.float32) for chan in self.buffered_chans]
-                raw_data = np.concatenate(data).view(dtypes)
-                self.data_socket.send(raw_data)
-                response = self.data_socket.recv()
-                assert response == b'ok', response
+                # dtypes = [(chan, np.float32) for chan in self.buffered_chans]
+                # raw_data = np.concatenate(data).view(dtypes)
+                # self.data_socket.send(raw_data)
+                # response = self.data_socket.recv()
+                # assert response == b'ok', response
                 self.acquired_data.append(data)
             else:
                 # TODO: Send it to the broker thingy.

@@ -154,12 +154,12 @@ class NI_DAQmxTab(DeviceTab):
             widget_list.append((name, DO_widgets, split_conn_DO))
         self.auto_place_widgets(*widget_list)
 
-        layout = self.get_tab_layout()
-        self.ai_button = AnalogInput('AI1', 'AI1')
-        self.ai_button.set_value(4)
-        layout.addWidget(self.ai_button)
+        # layout = self.get_tab_layout()
+        # self.ai_button = AnalogInput('AI1', 'AI1')
+        # self.ai_button.set_value(4)
+        # layout.addWidget(self.ai_button)
 
-        self.data_receiver = DataReceiver(self.ai_button)
+        # self.data_receiver = DataReceiver(self.ai_button)
 
         # We only need a wait monitor worker if we are if fact the device with
         # the wait monitor input.
@@ -243,7 +243,7 @@ class NI_DAQmxTab(DeviceTab):
                     'AI_timebase_terminal': properties.get('AI_timebase_terminal',None),
                     'AI_timebase_rate': properties.get('AI_timebase_rate',None),
                     'clock_terminal': clock_terminal,
-                    'data_receiver_port': self.data_receiver.port,
+                    # 'data_receiver_port': self.data_receiver.port,
                 },
             )
             self.add_secondary_worker("acquisition_worker")
