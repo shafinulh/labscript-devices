@@ -167,18 +167,21 @@ class Pulseblaster_No_DDS_Tab(DeviceTab):
     
     # This function gets the status of the Pulseblaster from the spinapi,
     # and updates the front panel widgets!
-    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True)  
+    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True, False, 1)  
     def status_monitor(self,notify_queue=None):
         # When called with a queue, this function writes to the queue
         # when the pulseblaster is waiting. This indicates the end of
         # an experimental run.
         self.status, waits_pending, time_based_shot_over = yield(self.queue_work(self._primary_worker,'check_status'))
+        # print(f"time_based_shot_over: {time_based_shot_over}")
         
         if self.programming_scheme == 'pb_start/BRANCH':
             done_condition = self.status['waiting']
         elif self.programming_scheme == 'pb_stop_programming/STOP':
             done_condition = self.status['stopped']
-            
+        # print(f"time_based_shot_over: {time_based_shot_over}")
+        # print(f"self.status: {self.status}")
+        # print(f"self.programming_scheme: {self.programming_scheme}")
         if time_based_shot_over is not None:
             done_condition = time_based_shot_over
             
@@ -204,28 +207,28 @@ class Pulseblaster_No_DDS_Tab(DeviceTab):
             self.status_widgets[state].setPixmap(pixmap)
         
     
-    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True)  
+    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True, False, 1)  
     def start(self,widget=None):
         yield(self.queue_work(self._primary_worker,'start_run'))
         self.status_monitor()
         
-    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True)  
+    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True, 2)  
     def stop(self,widget=None):
         yield(self.queue_work(self._primary_worker,'pb_stop'))
         self.status_monitor()
         
-    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True)  
+    @define_state(MODE_MANUAL|MODE_BUFFERED|MODE_TRANSITION_TO_BUFFERED|MODE_TRANSITION_TO_MANUAL,True, 4)  
     def reset(self,widget=None):
         yield(self.queue_work(self._primary_worker,'pb_reset'))
         self.status_monitor()
     
-    @define_state(MODE_BUFFERED,True)  
+    @define_state(MODE_BUFFERED,True, False, 1)  
     def start_run(self, notify_queue):
         """Starts the Pulseblaster, notifying the queue manager when
         the run is over"""
         self.statemachine_timeout_remove(self.status_monitor)
         self.start()
-        self.statemachine_timeout_add(100,self.status_monitor,notify_queue)
+        self.statemachine_timeout_add(1,self.status_monitor,notify_queue)
 
 
 class PulseblasterNoDDSWorker(Worker):
@@ -285,7 +288,7 @@ class PulseblasterNoDDSWorker(Worker):
             pb_stop()
             
         # Write the first two lines of the pulse program:
-        pb_start_programming(PULSE_PROGRAM)
+        pb_start_programming(PULSE_PROGRAM) 
         # Line zero is a wait:
         pb_inst_pbonly(flags, WAIT, 0, 100)
         # Line one is a brach to line 0:

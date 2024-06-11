@@ -360,50 +360,50 @@ class NI_DAQmxOutputWorker(Worker):
         return final_values
 
     def transition_to_manual(self, abort=False):
-        # Stop output tasks and call program_manual. Only call StopTask if not aborting.
-        # Otherwise results in an error if output was incomplete. If aborting, call
-        # ClearTask only.
-        npts = uInt64()
-        samples = uInt64()
-        tasks = []
-        if self.AO_task is not None:
-            tasks.append([self.AO_task, self.static_AO or self.AO_all_zero, 'AO'])
-            self.AO_task = None
-        if self.DO_task is not None:
-            tasks.append([self.DO_task, self.static_DO or self.DO_all_zero, 'DO'])
-            self.DO_task = None
+        # # Stop output tasks and call program_manual. Only call StopTask if not aborting.
+        # # Otherwise results in an error if output was incomplete. If aborting, call
+        # # ClearTask only.
+        # npts = uInt64()
+        # samples = uInt64()
+        # tasks = []
+        # if self.AO_task is not None:
+        #     tasks.append([self.AO_task, self.static_AO or self.AO_all_zero, 'AO'])
+        #     self.AO_task = None
+        # if self.DO_task is not None:
+        #     tasks.append([self.DO_task, self.static_DO or self.DO_all_zero, 'DO'])
+        #     self.DO_task = None
 
-        for task, static, name in tasks:
-            if not abort:
-                if not static:
-                    try:
-                        # Wait for task completion with a 1 second timeout:
-                        task.WaitUntilTaskDone(1)
-                    finally:
-                        # Log where we were up to in sample generation, regardless of
-                        # whether the above succeeded:
-                        task.GetWriteCurrWritePos(npts)
-                        task.GetWriteTotalSampPerChanGenerated(samples)
-                        # Detect -1 even though they're supposed to be unsigned ints, -1
-                        # seems to indicate the task was not started:
-                        current = samples.value if samples.value != 2 ** 64 - 1 else -1
-                        total = npts.value if npts.value != 2 ** 64 - 1 else -1
-                        msg = 'Stopping %s at sample %d of %d'
-                        self.logger.info(msg, name, current, total)
-                task.StopTask()
-            task.ClearTask()
+        # for task, static, name in tasks:
+        #     if not abort:
+        #         if not static:
+        #             try:
+        #                 # Wait for task completion with a 1 second timeout:
+        #                 task.WaitUntilTaskDone(1)
+        #             finally:
+        #                 # Log where we were up to in sample generation, regardless of
+        #                 # whether the above succeeded:
+        #                 task.GetWriteCurrWritePos(npts)
+        #                 task.GetWriteTotalSampPerChanGenerated(samples)
+        #                 # Detect -1 even though they're supposed to be unsigned ints, -1
+        #                 # seems to indicate the task was not started:
+        #                 current = samples.value if samples.value != 2 ** 64 - 1 else -1
+        #                 total = npts.value if npts.value != 2 ** 64 - 1 else -1
+        #                 msg = 'Stopping %s at sample %d of %d'
+        #                 self.logger.info(msg, name, current, total)
+        #         task.StopTask()
+        #     task.ClearTask()
 
-        # Remove the mirroring of the clock terminal, if applicable:
-        self.set_mirror_clock_terminal_connected(False)
+        # # Remove the mirroring of the clock terminal, if applicable:
+        # self.set_mirror_clock_terminal_connected(False)
 
-        # Remove connections between other terminals, if applicable:
-        self.set_connected_terminals_connected(False)
+        # # Remove connections between other terminals, if applicable:
+        # self.set_connected_terminals_connected(False)
 
-        # Set up manual mode tasks again:
-        self.start_manual_mode_tasks()
-        if abort:
-            # Reprogram the initial states:
-            self.program_manual(self.initial_values)
+        # # Set up manual mode tasks again:
+        # # self.start_manual_mode_tasks()
+        # if abort:
+        #     # Reprogram the initial states:
+        #     self.program_manual(self.initial_values)
 
         return True
 
@@ -447,7 +447,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
         self.wait_durations_analysed = Event('wait_durations_analysed')
 
         # Start task for manual mode
-        self.start_task(self.manual_mode_chans, self.manual_mode_rate)
+        # self.start_task(self.manual_mode_chans, self.manual_mode_rate)
 
     def shutdown(self):
         if self.task is not None:
@@ -584,7 +584,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
             self.AI_start_delay = self.AI_start_delay_ticks*self.buffered_rate
         self.acquired_data = []
         # Stop the manual mode task and start the buffered mode task:
-        self.stop_task()
+        # self.stop_task()
         self.buffered_mode = True
         self.start_task(self.buffered_chans, self.buffered_rate)
         return {}
@@ -598,7 +598,9 @@ class NI_DAQmxAcquisitionWorker(Worker):
         if not self.buffered_mode:
             return True
         if self.buffered_chans is not None:
+            self.logger.info(f"stopping task, {len(self.acquired_data)}")
             self.stop_task()
+            self.logger.info(f"stopping task, {len(self.acquired_data)}")
             # dtypes = [(chan, np.float32) for chan in self.buffered_chans]
             # raw_data = np.concatenate(self.acquired_data).view(dtypes)
             # self.data_socket.send(raw_data)
@@ -606,7 +608,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
             # assert response == b'ok', response
         self.buffered_mode = False
         self.logger.info('transitioning to manual mode, task stopped')
-        self.start_task(self.manual_mode_chans, self.manual_mode_rate)
+        # self.start_task(self.manual_mode_chans, self.manual_mode_rate)
 
         if abort:
             self.acquired_data = None
