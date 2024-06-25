@@ -431,7 +431,7 @@ class NI_DAQmxOutputWorker(Worker):
 
 class NI_DAQmxAcquisitionWorker(Worker):
     MAX_READ_INTERVAL = 0.2
-    MAX_READ_PTS = 10000
+    MAX_READ_PTS = 5000
 
     def init(self):
         # Prevent interference between the read callback and the shutdown code:
@@ -600,10 +600,9 @@ class NI_DAQmxAcquisitionWorker(Worker):
         return {}
 
     def post_experiment(self):
-        self.logger.debug('post_experiment processing')
         # If we were doing buffered mode acquisition, stop the buffered mode task. 
         # We might not have been doing buffered mode acquisition if
-        # there were no acuisitions this shot.
+        # there were no aqcuisitions this shot.
         if not self.buffered_mode:
             return True
         if self.buffered_chans is not None:
@@ -967,7 +966,6 @@ class NI_DAQmxWaitMonitorWorker(Worker):
         return {}
 
     def post_experiment(self):
-        self.logger.debug('post_experiment processing')
         self.stop_tasks(False)
         
         if self.wait_table is not None:
