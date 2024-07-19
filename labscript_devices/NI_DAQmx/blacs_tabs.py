@@ -11,14 +11,59 @@
 #                                                                   #
 #####################################################################
 import labscript_utils.h5_lock
-import h5py
 from labscript_utils import dedent
+import h5py
+import json
+import numpy as np
 
 from blacs.device_base_class import DeviceTab
+from labscript_utils.qtwidgets.analoginput import AnalogInput
+from labscript_utils.ls_zprocess import ZMQServer
 from .utils import split_conn_AO, split_conn_DO
+from qtutils import UiLoader, inmain_decorator
 from . import models
 import warnings
 
+# TODO: ideas for plotting layout:
+#   - all the plots in a single window, stacked on top of each other.
+#   - all signals on a single plot, different colour traces
+# will require changes to labscript_utils.qtwidgets.analoginput.{AnalogInput, InputPlotWindow}
+class DataReceiver(ZMQServer):
+    """ZMQServer that receives images on a zmq.REP socket, replies 'ok', and updates the
+    image widget and fps indicator"""
+
+    def __init__(self, buttons, logger):
+        ZMQServer.__init__(self, port=None, dtype='multipart')
+        self.buttons = buttons
+        self.last_frame_time = None
+        self.frame_rate = None
+        self.update_event = None
+        self.logger=logger
+
+    @inmain_decorator(wait_for_return=True)
+    def handler(self, data):
+        self.send([b'ok'])
+    
+        chans = json.loads(data[0].decode('utf-8'))
+        num_chans = len(chans)
+        data = np.frombuffer(memoryview(data[1]), dtype=np.float32)
+    
+        # break up the plot data to separate out each of the channels data
+        split_data = [data[i::num_chans] for i in range(num_chans)]
+
+        # the AnalogInput button uses IPC to communicate with the plot window Process
+        # The PlotWindow process opens a client socket to the BLACS_Broker_Pub port
+        # We can either (1) set up a server socket to that port and communicate via zmq
+        # or (2) can pipe data using IPC
+        # TODO: current IPC is using pipes, maybe using shared memory could be more efficient?
+        # 
+        # TODO: Create a function in Analog Input that manages the sending of data to the 
+        # PlotWindow process 
+        
+        for i, chan in enumerate(chans):
+            self.buttons[chan].set_buffer([split_data[i]])
+
+        return self.NO_RESPONSE
 
 class NI_DAQmxTab(DeviceTab):
     def initialise_GUI(self):
@@ -127,6 +172,18 @@ class NI_DAQmxTab(DeviceTab):
             widget_list.append((name, DO_widgets, split_conn_DO))
         self.auto_place_widgets(*widget_list)
 
+        layout = self.get_tab_layout()
+        
+        self.ai_buttons = {}
+        for i, chan in enumerate(AI_chans):
+            # TODO: Make the button open up the graph in the same window, not a separate window
+            ai_button = AnalogInput(f'{chan}', f'{chan}')
+            ai_button.set_value(i)
+            self.ai_buttons[chan] = ai_button
+            layout.addWidget(ai_button)
+
+        self.data_receiver = DataReceiver(self.ai_buttons, self.logger)
+
         # We only need a wait monitor worker if we are if fact the device with
         # the wait monitor input.
         with h5py.File(connection_table.filepath, 'r') as f:
@@ -209,6 +266,7 @@ class NI_DAQmxTab(DeviceTab):
                     'AI_timebase_terminal': properties.get('AI_timebase_terminal',None),
                     'AI_timebase_rate': properties.get('AI_timebase_rate',None),
                     'clock_terminal': clock_terminal,
+                    'data_receiver_port': self.data_receiver.port,
                 },
             )
             self.add_secondary_worker("acquisition_worker")
