@@ -17,6 +17,7 @@ import json
 import numpy as np
 
 from blacs.device_base_class import DeviceTab
+from labscript_utils.qtwidgets.InputPlotWindow import PlotWindow
 from labscript_utils.qtwidgets.analoginput import AnalogInput
 from labscript_utils.ls_zprocess import ZMQServer
 from .utils import split_conn_AO, split_conn_DO
@@ -61,7 +62,7 @@ class DataReceiver(ZMQServer):
         # PlotWindow process 
         
         for i, chan in enumerate(chans):
-            self.buttons[chan].set_buffer([split_data[i]])
+            self.buttons[chan].set_buffer(split_data[i])
 
         return self.NO_RESPONSE
 
@@ -174,11 +175,14 @@ class NI_DAQmxTab(DeviceTab):
 
         layout = self.get_tab_layout()
         
+        # create the PlotProcess
+        win = PlotWindow()
+        to_child, from_child = win.start()
         self.ai_buttons = {}
         for i, chan in enumerate(AI_chans):
             # TODO: Make the button open up the graph in the same window, not a separate window
-            ai_button = AnalogInput(f'{chan}', f'{chan}')
-            ai_button.set_value(i)
+            ai_button = AnalogInput("ni_6363", f'{chan}', win, to_child, from_child)
+            ai_button.set_value(0)
             self.ai_buttons[chan] = ai_button
             layout.addWidget(ai_button)
 
