@@ -44,27 +44,35 @@ class DataReceiver(ZMQServer):
     @inmain_decorator(wait_for_return=True)
     def handler(self, data):
         self.send([b'ok'])
-    
-        chans = json.loads(data[0].decode('utf-8'))
-        num_chans = len(chans)
-        data = np.frombuffer(memoryview(data[1]), dtype=np.float32)
-    
-        # break up the plot data to separate out each of the channels data
-        split_data = [data[i::num_chans] for i in range(num_chans)]
 
-        # the AnalogInput button uses IPC to communicate with the plot window Process
-        # The PlotWindow process opens a client socket to the BLACS_Broker_Pub port
-        # We can either (1) set up a server socket to that port and communicate via zmq
-        # or (2) can pipe data using IPC
-        # TODO: current IPC is using pipes, maybe using shared memory could be more efficient?
-        # 
-        # TODO: Create a function in Analog Input that manages the sending of data to the 
-        # PlotWindow process 
+        if (data[0] == b'max_plot_points'):
+            chans = json.loads(data[1].decode('utf-8'))
+            data = np.frombuffer(memoryview(data[2]), dtype=int)[0]
+            self.logger.debug(f"test: {data}, {chans}")
+            for i, chan in enumerate(chans):
+                self.buttons[chan].set_max_data(data)
+            return self.NO_RESPONSE
+        else:
+            chans = json.loads(data[0].decode('utf-8'))
+            num_chans = len(chans)
+            data = np.frombuffer(memoryview(data[1]), dtype=np.float32)
         
-        for i, chan in enumerate(chans):
-            self.buttons[chan].set_buffer(split_data[i])
+            # break up the plot data to separate out each of the channels data
+            split_data = [data[i::num_chans] for i in range(num_chans)]
 
-        return self.NO_RESPONSE
+            # the AnalogInput button uses IPC to communicate with the plot window Process
+            # The PlotWindow process opens a client socket to the BLACS_Broker_Pub port
+            # We can either (1) set up a server socket to that port and communicate via zmq
+            # or (2) can pipe data using IPC
+            # TODO: current IPC is using pipes, maybe using shared memory could be more efficient?
+            # 
+            # TODO: Create a function in Analog Input that manages the sending of data to the 
+            # PlotWindow process 
+            
+            for i, chan in enumerate(chans):
+                self.buttons[chan].set_buffer(split_data[i])
+
+            return self.NO_RESPONSE
 
 class NI_DAQmxTab(DeviceTab):
     def initialise_GUI(self):
