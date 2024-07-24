@@ -183,13 +183,10 @@ class NI_DAQmxTab(DeviceTab):
 
         layout = self.get_tab_layout()
         
-        # create the PlotProcess
-        win = PlotWindow()
-        to_child, from_child = win.start()
         self.ai_buttons = {}
         for i, chan in enumerate(AI_chans):
             # TODO: Make the button open up the graph in the same window, not a separate window
-            ai_button = AnalogInput("ni_6363", f'{chan}', win, to_child, from_child)
+            ai_button = AnalogInput("ni_6363", f'{chan}')
             ai_button.set_value(0)
             self.ai_buttons[chan] = ai_button
             layout.addWidget(ai_button)
