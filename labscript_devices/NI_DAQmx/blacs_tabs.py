@@ -20,7 +20,7 @@ from blacs.device_base_class import DeviceTab
 from labscript_utils.qtwidgets.InputPlotWindow import PlotWindow
 from labscript_utils.qtwidgets.analoginput import AnalogInput
 from labscript_utils.ls_zprocess import ZMQServer
-from .utils import split_conn_AO, split_conn_DO
+from .utils import split_conn_AO, split_conn_AI, split_conn_DO
 from qtutils import UiLoader, inmain_decorator
 from . import models
 import warnings
@@ -60,15 +60,7 @@ class DataReceiver(ZMQServer):
             # break up the plot data to separate out each of the channels data
             split_data = [data[i::num_chans] for i in range(num_chans)]
 
-            # the AnalogInput button uses IPC to communicate with the plot window Process
-            # The PlotWindow process opens a client socket to the BLACS_Broker_Pub port
-            # We can either (1) set up a server socket to that port and communicate via zmq
-            # or (2) can pipe data using IPC
-            # TODO: current IPC is using pipes, maybe using shared memory could be more efficient?
-            # 
-            # TODO: Create a function in Analog Input that manages the sending of data to the 
-            # PlotWindow process 
-            
+            # the AnalogInput button uses IPC (pipes) to communicate with the plot window Process
             for i, chan in enumerate(chans):
                 self.buttons[chan].set_buffer(split_data[i])
 
@@ -179,17 +171,18 @@ class NI_DAQmxTab(DeviceTab):
             else:
                 name += ' (static)'
             widget_list.append((name, DO_widgets, split_conn_DO))
-        self.auto_place_widgets(*widget_list)
-
-        layout = self.get_tab_layout()
         
         self.ai_buttons = {}
         for i, chan in enumerate(AI_chans):
-            # TODO: Make the button open up the graph in the same window, not a separate window
-            ai_button = AnalogInput("ni_6363", f'{chan}')
+            child_device = self.get_child_from_connection_table(self.device_name,chan)
+            conn_name = child_device.name if child_device else '-'
+            ai_button = AnalogInput(self.device_name, chan, conn_name)
             ai_button.set_value(0)
             self.ai_buttons[chan] = ai_button
-            layout.addWidget(ai_button)
+
+        widget_list.append(("Analog Inputs", self.ai_buttons, split_conn_AI))
+
+        self.auto_place_widgets(*widget_list)
 
         self.data_receiver = DataReceiver(self.ai_buttons, self.logger)
 
