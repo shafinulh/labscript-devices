@@ -10,6 +10,7 @@
 # file in the root of the project for the full license.             #
 #                                                                   #
 #####################################################################
+import json
 import sys
 import time
 import threading
@@ -34,6 +35,8 @@ from blacs.tab_base_classes import Worker
 from .utils import split_conn_port, split_conn_DO, split_conn_AI
 from .daqmx_utils import incomplete_sample_detection
 
+import zmq
+from labscript_utils.ls_zprocess import Context
 
 class NI_DAQmxOutputWorker(Worker):
     def init(self):
@@ -434,6 +437,12 @@ class NI_DAQmxAcquisitionWorker(Worker):
     MAX_READ_PTS = 1000
 
     def init(self):
+        # Create the socket to communicate with the DataReceiver for Plotting
+        self.data_socket = Context().socket(zmq.REQ)
+        self.data_socket.connect(
+            f'tcp://{self.parent_host}:{self.data_receiver_port}'
+        )
+
         # Prevent interference between the read callback and the shutdown code:
         self.tasklock = threading.RLock()
 
@@ -485,12 +494,19 @@ class NI_DAQmxAcquisitionWorker(Worker):
             )
             # Select only the data read, and downconvert to 32 bit:
             data = self.read_array[: int(samples_read.value), :].astype(np.float32)
+            # TODO: add the plot data network communication here, can send data directly with no need to serialize
             if self.buffered_mode:
                 # Append to the list of acquired data:
                 self.acquired_data.append(data)
             else:
                 # TODO: Send it to the broker thingy.
-                pass
+                # TODO: is pickling the list more efficient than numpy/json?
+                # prepend data packet with the channels to unpack from raw_data_buffer
+                manual_chans_json = json.dumps(list(self.manual_mode_chans)).encode('utf-8')
+
+                self.data_socket.send_multipart([manual_chans_json, data])
+                response = self.data_socket.recv()
+                assert response == b'ok', response
         return 0
 
     def start_task(self, chans, rate):
@@ -592,6 +608,17 @@ class NI_DAQmxAcquisitionWorker(Worker):
             # delay is defined in sample clock ticks, calculate in sec and save for later
             self.AI_start_delay = self.AI_start_delay_ticks*self.buffered_rate
         self.acquired_data = []
+        
+        # Configure the Buffered Mode Real Time Plotting
+        shot_length = device_properties.get('stop_time', None)
+        acq_points_per_chan = np.array([int(shot_length * self.buffered_rate)]).tobytes()
+
+        buffered_chans_json = json.dumps(list(self.buffered_chans)).encode('utf-8')
+
+        self.data_socket.send_multipart([b'max_plot_points', buffered_chans_json, acq_points_per_chan])
+        response = self.data_socket.recv()
+        assert response == b'ok', response
+
         # Stop the manual mode task if it is running and start the buffered mode task:
         if self.manual_mode_task:
             self.stop_task()
@@ -608,6 +635,16 @@ class NI_DAQmxAcquisitionWorker(Worker):
             return True
         if self.buffered_chans is not None:
             self.stop_task()
+
+            # TODO: is pickling the list more efficient than numpy/json?
+            raw_data_buffer = np.array(self.acquired_data).tobytes()
+            # prepend data packet with the channels to unpack from raw_data_buffer
+            buffered_chans_json = json.dumps(list(self.buffered_chans)).encode('utf-8')
+
+            self.data_socket.send_multipart([buffered_chans_json, raw_data_buffer])
+            response = self.data_socket.recv()
+            assert response == b'ok', response
+
         self.buffered_mode = False
         self.logger.info('processing acquired data, task stopped')
 
@@ -659,6 +696,16 @@ class NI_DAQmxAcquisitionWorker(Worker):
             self.buffered_rate = None
         else:
             self.logger.info('transitioning to manual mode')
+            
+            # Configure the Manual Mode Real-Time Plotting
+            max_manual_mode_points = np.array([int(10000)]).tobytes() # TODO: set a proper value
+            
+            manual_chans_json = json.dumps(list(self.manual_mode_chans)).encode('utf-8')
+            
+            self.data_socket.send_multipart([b'max_plot_points', manual_chans_json, max_manual_mode_points])
+            response = self.data_socket.recv()
+            assert response == b'ok', response
+
             self.manual_mode_task = self.start_task(self.manual_mode_chans, self.manual_mode_rate)
 
         return True
