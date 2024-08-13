@@ -579,7 +579,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
             if self.task is None:
                 raise RuntimeError('Task not running')
             # Read remaining data:
-            self.read(self.task, None, -1)
+            self.read(self.task.taskHandle.value, None, -1)
             # Stop the task:
             self.task.StopTask()
             self.task.ClearTask()
@@ -637,7 +637,7 @@ class NI_DAQmxAcquisitionWorker(Worker):
             self.stop_task()
 
             # TODO: is pickling the list more efficient than numpy/json?
-            raw_data_buffer = np.array(self.acquired_data).tobytes()
+            raw_data_buffer = np.concatenate(self.acquired_data).tobytes()
             # prepend data packet with the channels to unpack from raw_data_buffer
             buffered_chans_json = json.dumps(list(self.buffered_chans)).encode('utf-8')
 
