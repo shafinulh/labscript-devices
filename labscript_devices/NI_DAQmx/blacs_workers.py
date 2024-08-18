@@ -706,7 +706,8 @@ class NI_DAQmxAcquisitionWorker(Worker):
             response = self.data_socket.recv()
             assert response == b'ok', response
 
-            self.manual_mode_task = self.start_task(self.manual_mode_chans, self.manual_mode_rate)
+            if not self.task:
+                self.manual_mode_task = self.start_task(self.manual_mode_chans, self.manual_mode_rate)
 
         return True
 
