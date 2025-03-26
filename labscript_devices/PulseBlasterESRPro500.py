@@ -18,14 +18,14 @@ class PulseBlasterESRPro500(PulseBlaster_No_DDS):
     description = 'SpinCore PulseBlaster ESR-PRO-500'
     clock_limit = 50.0e6 # can probably go faster
     clock_resolution = 4e-9
-    n_flags = 21
+    n_flags = 24
     core_clock_freq = 500.0
 
 
 @BLACS_tab    
 class pulseblasteresrpro500(Pulseblaster_No_DDS_Tab):
     # Capabilities
-    num_DO = 21
+    num_DO = 24
     def __init__(self,*args,**kwargs):
         self.device_worker_class = PulseblasterESRPro500Worker 
         Pulseblaster_No_DDS_Tab.__init__(self,*args,**kwargs)
